@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html>
+    <div id="view-selector" class="view-selector">
+    <button id="viewer-tab" class="tab-button active">Fusion Craft Viewer</button>
+    <button id="tree-tab" class="tab-button">Fusion Recipe Tree</button>
+    </div>
+<head>
+    <title>Fusion Craft</title>
+    <style>
+        .view-selector {
+            display: flex;
+            gap: 0.5em;
+            margin-bottom: 1em;
+        }
+
+        .tab-button {
+            background: #e0e0e0;
+            border: none;
+            border-radius: 6px 6px 0 0;
+            padding: 0.7em 1.4em;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background 0.2s, box-shadow 0.2s;
+            box-shadow: 0 2px 4px #0001;
+        }
+
+        .tab-button.active {
+            background: #fff;
+            font-weight: bold;
+            color: #222;
+            box-shadow: 0 4px 12px #0002;
+            border-bottom: 2px solid #1976d2;
+        }
+
+        body { font-family: Arial, sans-serif; background: #f6f6f6; }
+        .controls { margin-bottom: 1em; }
+        #search { font-size: 1em; padding: 0.3em; width: 300px; }
+        .recipe-container { display: flex; flex-wrap: wrap; gap: 1em; }
+        .recipe-card {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px #0001;
+            padding: 1em;
+            min-width: 300px;
+            max-width: 350px;
+        }
+        .inputs, .outputs { display: flex; align-items: center; gap: 0.5em; margin-bottom: 0.5em; }
+        .shard {
+            padding: 0.2em 0.7em;
+            border-radius: 5px;
+            font-weight: bold;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .common    { background: #D1D5D8; color: #222; }
+        .uncommon  { background: #41A85F; color: #222; }
+        .rare      { background: #2C82C9; color: #222; }
+        .epic      { background: #9365B8; color: #222; }
+        .legendary { background: #FAC51C; color: #222; }
+        .output-error {
+            color: #b00;
+            font-weight: bold;
+            margin-left: 0.5em;
+        }
+        #search-message {
+            color: #b00;
+            font-size: 1em;
+            margin-bottom: 1em;
+            display: block;
+        }
+        #tooltip {
+            display: none;
+            position: fixed;
+            background: #222;
+            color: #fff;
+            padding: 0.4em 0.8em;
+            border-radius: 5px;
+            white-space: nowrap;
+            z-index: 1000;
+            font-size: 0.95em;
+            box-shadow: 0 2px 8px #0004;
+            pointer-events: none;
+            max-width: 350px;
+            overflow-wrap: break-word;
+        }
+        .input-count { color: #222; font-size: 0.95em; }
+        .output-count { color: #222; font-size: 0.95em; }
+        /* Overlay modal for weights */
+        #weight-controls-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.35);
+            z-index: 2000;
+            display: none;
+            justify-content: center;
+            align-items: flex-start;
+            padding-top: 60px;
+        }
+        #weight-controls {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 20px #0004;
+            padding: 1.2em 2em;
+            min-width: 320px;
+            max-height: 80vh;
+            overflow-y: auto;
+            font-size: 1em;
+            z-index: 2001;
+            position: relative;
+        }
+        .weight-heading-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 50px;
+        }
+        #weight-controls h3 {
+            margin: 0 0 1em 0;
+            font-size: 1.15em;
+            text-align: center;
+            width: 100%;
+        }
+        #weight-list label {
+            display: block;
+            margin-bottom: 0.25em;
+            font-size: 0.95em;
+            white-space: nowrap;
+        }
+        #weight-list select {
+            margin-left: 0.4em;
+            font-size: 0.95em;
+        }
+        #close-weights {
+            position: absolute;
+            top: 10px; right: 10px;
+            background: #eee;
+            border: none;
+            border-radius: 50%;
+            width: 32px; height: 32px;
+            font-size: 1.1em;
+            cursor: pointer;
+            z-index: 2002;
+        }
+        #toggle-weights {
+            position: fixed;
+            right: 20px;
+            top: 20px;
+            z-index: 2001;
+            font-size: 1em;
+            padding: 0.5em 1.2em;
+            border-radius: 6px;
+            border: 1px solid #aaa;
+            background: #fff;
+            box-shadow: 0 2px 8px #0001;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>Fusion Craft Viewer</h1>
+    <button id="toggle-weights">Assign Input Weights</button>
+    <div id="weight-controls-overlay">
+        <div id="weight-controls">
+            <button id="close-weights" title="Close">&times;</button>
+            <div class="weight-heading-container">
+                <h3>Assign Input Weights</h3>
+            </div>
+            <div id="weight-list"></div>
+            <button id="save-weights" style="margin-top:1em; width:100%;">Save Weights</button>
+        </div>
+    </div>
+    <div class="controls">
+        <input type="text" id="search" placeholder="Search output shards...">
+        <button id="prevPage">Prev</button>
+        <span id="pageInfo"></span>
+        <button id="nextPage">Next</button>
+    </div>
+    <span id="search-message"></span>
+    <div id="recipe-container" class="recipe-container"></div>
+    <div id="tree-container" style="display:none;"></div>
+    <div id="tooltip"></div>
+
+<script>
+let allData = null;
+let allRecipes = [];
+let allShards = {};
+let groupedRecipes = {}; // { input1: [ [key, outputs], ... ] }
+let input1List = [];     // List of input1 IDs in order
+
+let currentInput1Page = 0; // Page = index in input1List
+
+const RECIPES_PER_PAGE = 174;
+const SEARCH_RESULTS_PER_PAGE = 100;
+const MIN_SEARCH_LENGTH = 3;
+
+let currentSearchPage = 0;
+let lastSearchResults = [];
+
+document.getElementById('viewer-tab').addEventListener('click', function() {
+    setActiveTab('viewer');
+});
+document.getElementById('tree-tab').addEventListener('click', function() {
+    setActiveTab('tree');
+});
+
+function setActiveTab(tab) {
+    // Highlight the selected tab
+    document.getElementById('viewer-tab').classList.toggle('active', tab === 'viewer');
+    document.getElementById('tree-tab').classList.toggle('active', tab === 'tree');
+    // Show/hide the relevant section
+    document.getElementById('recipe-container').style.display = (tab === 'viewer') ? 'flex' : 'none';
+    document.getElementById('tree-container').style.display = (tab === 'tree') ? 'block' : 'none';
+    // Optionally, update other controls or reset search/page state
+}
+
+
+const rarityClass = {
+    "common": "common",
+    "uncommon": "uncommon",
+    "rare": "rare",
+    "epic": "epic",
+    "legendary": "legendary"
+};
+const rarityOrder = {
+    "common": 1,
+    "uncommon": 2,
+    "rare": 3,
+    "epic": 4,
+    "legendary": 5
+};
+const CRAFTING_EFFORT = 0.1; // Or any small value you want
+
+function getShardWeight(shardId, recipeKey = null) {
+    const w = inputWeights[shardId];
+    if (w === "crafted" && recipeKey) {
+        const [in1, in2] = recipeKey.split("+");
+        return getShardWeight(in1) + getShardWeight(in2) + CRAFTING_EFFORT;
+    }
+    if (typeof w !== "undefined" && w !== "crafted") {
+        return w;
+    }
+    // Default fallback
+    return 0;
+}
+function saveWeightsToFile() {
+    // Optionally include crafted effort in the saved file
+    const saveObj = {
+        ...inputWeights,
+        _crafted_effort: CRAFTING_EFFORT // Save under a special key
+    };
+    const blob = new Blob([JSON.stringify(saveObj, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'weights.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const saveBtn = document.getElementById('save-weights');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', saveWeightsToFile);
+    }
+});
+
+
+// For sorting by ID: C1, U2, etc.
+const rarityLetterOrder = { C: 1, U: 2, R: 3, E: 4, L: 5 };
+
+function sortShardIds(a, b) {
+    // a and b are [id, shard] pairs
+    const matchA = a[0].match(/^([A-Z])(\d+)$/);
+    const matchB = b[0].match(/^([A-Z])(\d+)$/);
+    if (matchA && matchB) {
+        const rarityA = rarityLetterOrder[matchA[1]] || 99;
+        const rarityB = rarityLetterOrder[matchB[1]] || 99;
+        if (rarityA !== rarityB) return rarityA - rarityB;
+        const numA = parseInt(matchA[2], 10);
+        const numB = parseInt(matchB[2], 10);
+        return numA - numB;
+    }
+    // Fallback: string compare
+    return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0;
+}
+
+// Weights for Crafing order Suggestion
+const WEIGHT_LEVELS = [
+    { label: "Have", value:         0.5     },
+    { label: "Easy", value:         3       },
+    { label: "Medium", value:       7       },
+    { label: "Hard", value:         20      },
+    { label: "Very Hard", value:    150     },
+    { label: "Impossible", value:   10000   },
+    { label: "Crafted", value:      "crafted"} 
+];
+
+let inputWeights = {};
+
+function getInputWeight(shardId) {
+    return typeof inputWeights[shardId] !== "undefined" ? inputWeights[shardId] : 0;
+}
+
+function sortByInputWeight(arr) {
+    return arr.slice().sort((a, b) => {
+        const [in1a, in2a] = a[0].split("+");
+        const [in1b, in2b] = b[0].split("+");
+        // Use the same rarity/number sorting for input1, then input2
+        const cmp1 = sortShardIds([in1a, allShards[in1a]], [in1b, allShards[in1b]]);
+        if (cmp1 !== 0) return cmp1;
+        return sortShardIds([in2a, allShards[in2a]], [in2b, allShards[in2b]]);
+    });
+}
+
+// Load weights.json before rendering
+fetch('../data/weights.json')
+  .then(res => res.json())
+  .then(weights => {
+    inputWeights = weights; // Set your inputWeights object
+    // Now load the main data
+    return fetch('../data/FULL fusion data with shard info.json');
+  })
+  .then(res => res.json())
+  .then(data => {
+    allData = data;
+    allRecipes = Object.entries(data.recipes);
+    allShards = data.shards;
+    groupRecipesByInput1();
+    renderWeightControls();
+    renderRecipes();
+  })
+  .catch(err => {
+    document.getElementById('recipe-container').innerText = "Failed to load data. Check console.";
+    console.error(err);
+  });
+
+
+function groupRecipesByInput1() {
+    groupedRecipes = {};
+    for (const [key, outputs] of allRecipes) {
+        const [in1, in2] = key.split("+");
+        if (!groupedRecipes[in1]) groupedRecipes[in1] = [];
+        groupedRecipes[in1].push([key, outputs]);
+    }
+    // Sort input1List by rarity/number order
+    input1List = Object.keys(groupedRecipes).sort((a, b) => sortShardIds([a, allShards[a]], [b, allShards[b]]));
+}
+
+function renderWeightControls() {
+    const container = document.getElementById('weight-list');
+    // Sort by rarity/number order
+    const sortedShards = Object.entries(allShards).sort(sortShardIds);
+
+    // Add crafted weight control at the top
+    container.innerHTML = `
+        <label>
+            <span class="shard" style="margin-right:0.3em; background:#eee; color:#333;">Crafted (effort)</span>
+            <input type="number" step="0.01" min="0" id="crafted-weight-input" value="${CRAFTING_EFFORT}">
+        </label>
+        <hr>
+    ` + sortedShards.map(([id, shard]) => {
+        return `
+            <label>
+                <span class="shard ${rarityClass[shard.rarity] || ''}" style="margin-right:0.3em;">${shard.name} (${id})</span>
+                <select data-shard="${id}">
+                    ${WEIGHT_LEVELS.map(w =>
+                        `<option value="${w.value}" ${(inputWeights[id] + "") === (w.value + "") ? 'selected' : ''}>${w.label}</option>`
+                    ).join("")}
+                </select>
+            </label>
+        `;
+    }).join("");
+
+    // Handler for crafted effort input
+    document.getElementById('crafted-weight-input').addEventListener('change', function() {
+        window.CRAFTING_EFFORT = parseFloat(this.value);
+        renderRecipes(document.getElementById('search').value.trim().toLowerCase());
+    });
+
+    container.querySelectorAll('select').forEach(sel => {
+        sel.addEventListener('change', function() {
+            const val = this.value;
+            // If "crafted" is selected, save as string, else save as float
+            inputWeights[this.getAttribute('data-shard')] = (val === "crafted") ? "crafted" : parseFloat(val);
+            renderRecipes(document.getElementById('search').value.trim().toLowerCase());
+        });
+    });
+}
+
+
+function renderRecipes(filter = "") {
+    const container = document.getElementById('recipe-container');
+    const searchMsg = document.getElementById('search-message');
+    container.innerHTML = "";
+    searchMsg.textContent = "";
+
+    // If searching, flatten all recipes and filter globally
+    if (filter && filter.length < MIN_SEARCH_LENGTH) {
+        searchMsg.textContent = `Please enter at least ${MIN_SEARCH_LENGTH} characters to search.`;
+        document.getElementById('pageInfo').textContent = "";
+        document.getElementById('prevPage').disabled = true;
+        document.getElementById('nextPage').disabled = true;
+        return;
+    }
+
+    if (filter) {
+        // Filter recipes by output only
+        let filtered = [];
+        for (const [key, outputs] of allRecipes) {
+            const outputText = outputs
+                .map(o => (allShards[o.id]?.name || o.id))
+                .join(" ")
+                .toLowerCase();
+            if (outputText.includes(filter)) {
+                filtered.push([key, outputs]);
+            }
+        }
+
+        lastSearchResults = filtered;
+
+        const totalPages = Math.ceil(filtered.length / SEARCH_RESULTS_PER_PAGE);
+        if (currentSearchPage >= totalPages) currentSearchPage = totalPages - 1;
+        if (currentSearchPage < 0) currentSearchPage = 0;
+
+        const startIdx = currentSearchPage * SEARCH_RESULTS_PER_PAGE;
+        const endIdx = startIdx + SEARCH_RESULTS_PER_PAGE;
+        const pageResults = filtered.slice(startIdx, endIdx);
+
+        const sortedResults = sortByInputWeight(pageResults);
+
+        let shown = 0;
+        for (const [key, outputs] of sortedResults) {
+            const [in1, in2] = key.split("+");
+            const shard1 = allShards[in1];
+            const shard2 = allShards[in2];
+            const combinedWeight = getInputWeight(in1) + getInputWeight(in2);
+
+            // Inputs (always show fuse amount)
+            const inputsHTML = [shard1, shard2].map((shard, idx) => {
+                if (!shard) return `<span style="color:#b00">Missing</span>`;
+                const fuse = typeof shard.fuse_amount !== "undefined" ? shard.fuse_amount : "?";
+                return `
+                    <div class="shard ${rarityClass[shard.rarity] || ''}" data-tooltip='${tooltipContent(shard)}'>
+                        ${shard.name} <span class="input-count">(x${fuse})</span>
+                    </div>
+                    ${idx === 0 ? "+" : ""}
+                `;
+            }).join(" ");
+
+            // Outputs
+            const outputsHTML = outputs.map(output => {
+                const outShard = allShards[output.id];
+                let errorMsg = "";
+                if (output.count !== 1 && output.count !== 2) {
+                    errorMsg = `<span class="output-error">ERROR: Output count ${output.count}</span>`;
+                }
+                return `
+                    <div class="shard ${outShard ? (rarityClass[outShard.rarity] || '') : ''}" data-tooltip='${outShard ? tooltipContent(outShard) : "Unknown Output"}'>
+                        ${outShard ? outShard.name : output.id}
+                        <span class="output-count">(x${output.count})</span>
+                        ${errorMsg}
+                    </div>
+                `;
+            }).join(" ");
+
+            container.innerHTML += `
+                <div class="recipe-card">
+                    <div class="inputs">${inputsHTML}</div>
+                    <div class="outputs">${outputsHTML}</div>
+                </div>
+            `;
+            shown++;
+        }
+
+        // Pagination UI
+        document.getElementById('pageInfo').textContent =
+            `Search results: ${filtered.length} (Page ${totalPages === 0 ? 0 : currentSearchPage + 1} of ${totalPages})`;
+        document.getElementById('prevPage').disabled = currentSearchPage <= 0;
+        document.getElementById('nextPage').disabled = currentSearchPage >= totalPages - 1;
+
+        addTooltipListeners();
+        if (shown === 0) {
+            container.innerHTML = "<div>No recipes found for your search/filter.</div>";
+        }
+        return;
+    }
+
+    // Normal paginated view (grouped by input1)
+    if (input1List.length === 0) {
+        container.innerHTML = "<div>No recipes found.</div>";
+        document.getElementById('pageInfo').textContent = "";
+        document.getElementById('prevPage').disabled = true;
+        document.getElementById('nextPage').disabled = true;
+        return;
+    }
+    if (currentInput1Page < 0) currentInput1Page = 0;
+    if (currentInput1Page >= input1List.length) currentInput1Page = input1List.length - 1;
+
+    const input1 = input1List[currentInput1Page];
+    let group = groupedRecipes[input1];
+
+    group = sortByInputWeight(group);
+
+    const pageRecipes = group.slice(0, RECIPES_PER_PAGE);
+
+    let shown = 0;
+    for (const [key, outputs] of pageRecipes) {
+        const [in1, in2] = key.split("+");
+        const shard1 = allShards[in1];
+        const shard2 = allShards[in2];
+        const combinedWeight = getInputWeight(in1) + getInputWeight(in2);
+
+        const inputsHTML = [shard1, shard2].map((shard, idx) => {
+            if (!shard) return `<span style="color:#b00">Missing</span>`;
+            const fuse = typeof shard.fuse_amount !== "undefined" ? shard.fuse_amount : "?";
+            return `
+                <div class="shard ${rarityClass[shard.rarity] || ''}" data-tooltip='${tooltipContent(shard)}'>
+                    ${shard.name} <span class="input-count">(x${fuse})</span>
+                </div>
+                ${idx === 0 ? "+" : ""}
+            `;
+        }).join(" ");
+
+        const outputsHTML = outputs.map(output => {
+            const outShard = allShards[output.id];
+            let errorMsg = "";
+            if (output.count !== 1 && output.count !== 2) {
+                errorMsg = `<span class="output-error">ERROR: Output count ${output.count}</span>`;
+            }
+            return `
+                <div class="shard ${outShard ? (rarityClass[outShard.rarity] || '') : ''}" data-tooltip='${outShard ? tooltipContent(outShard) : "Unknown Output"}'>
+                    ${outShard ? outShard.name : output.id}
+                    <span class="output-count">(x${output.count})</span>
+                    ${errorMsg}
+                </div>
+            `;
+        }).join(" ");
+
+        container.innerHTML += `
+            <div class="recipe-card">
+                <div class="inputs">${inputsHTML}</div>
+                <div class="outputs">${outputsHTML}</div>
+            </div>
+        `;
+        shown++;
+    }
+    if (shown === 0) {
+        container.innerHTML = "<div>No recipes found for your search/filter.</div>";
+    }
+
+    const pageInfo = document.getElementById('pageInfo');
+    if (pageInfo) {
+        const input1Name = allShards[input1]?.name || input1;
+        pageInfo.textContent = `Input 1: ${input1Name} (${currentInput1Page + 1} of ${input1List.length})`;
+    }
+    document.getElementById('prevPage').disabled = currentInput1Page <= 0;
+    document.getElementById('nextPage').disabled = currentInput1Page >= input1List.length - 1;
+    addTooltipListeners();
+}
+
+function tooltipContent(shard) {
+    if (!shard) return "";
+    return `Family: ${shard.family}<br>
+            Type: ${shard.type}<br>
+            Rarity: ${shard.rarity}<br>
+            Fuse: ${shard.fuse_amount}`;
+}
+
+function addTooltipListeners() {
+    const tooltip = document.getElementById('tooltip');
+    document.querySelectorAll('.shard').forEach(shard => {
+        shard.addEventListener('mouseenter', function(e) {
+            const content = this.getAttribute('data-tooltip');
+            if (!content) return;
+            tooltip.innerHTML = content;
+
+            tooltip.style.visibility = 'hidden';
+            tooltip.style.display = 'block';
+            tooltip.style.left = '-9999px';
+            tooltip.style.top = '-9999px';
+
+            setTimeout(() => {
+                const rect = this.getBoundingClientRect();
+                const tRect = tooltip.getBoundingClientRect();
+                let left = rect.left + rect.width / 2 - tRect.width / 2;
+                let top = rect.bottom + 5;
+
+                if (left < 5) left = 5;
+                if (left + tRect.width > window.innerWidth - 5) left = window.innerWidth - tRect.width - 5;
+
+                tooltip.style.left = left + 'px';
+                tooltip.style.top = top + 'px';
+                tooltip.style.visibility = 'visible';
+            }, 0);
+        });
+        shard.addEventListener('mouseleave', function(e) {
+            tooltip.style.display = 'none';
+            tooltip.style.visibility = 'hidden';
+        });
+    });
+}
+
+// Pagination controls
+document.getElementById('prevPage').addEventListener('click', function() {
+    const filter = document.getElementById('search').value.trim().toLowerCase();
+    if (filter.length >= MIN_SEARCH_LENGTH) {
+        currentSearchPage--;
+        renderRecipes(filter);
+    } else {
+        currentInput1Page--;
+        renderRecipes("");
+    }
+});
+document.getElementById('nextPage').addEventListener('click', function() {
+    const filter = document.getElementById('search').value.trim().toLowerCase();
+    if (filter.length >= MIN_SEARCH_LENGTH) {
+        currentSearchPage++;
+        renderRecipes(filter);
+    } else {
+        currentInput1Page++;
+        renderRecipes("");
+    }
+});
+document.getElementById('search').addEventListener('input', function() {
+    currentInput1Page = 0;
+    currentSearchPage = 0;
+    const filter = this.value.trim().toLowerCase();
+    renderRecipes(filter);
+});
+
+// Overlay logic
+document.getElementById('toggle-weights').addEventListener('click', function() {
+    document.getElementById('weight-controls-overlay').style.display = "flex";
+});
+document.getElementById('close-weights').addEventListener('click', function() {
+    document.getElementById('weight-controls-overlay').style.display = "none";
+});
+</script>
+</body>
+</html>
